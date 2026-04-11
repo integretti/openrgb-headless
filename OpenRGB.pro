@@ -344,6 +344,12 @@ CONFIG(headless) {
     HEADERS -= $$GUI_H
     FORMS =
 
+    # Re-add the few qt/ files that contain pure utility code with no Qt deps
+    # but are #include'd by Controllers (RGB <-> HSV conversion math).
+    SOURCES += qt/hsv.cpp
+    HEADERS += qt/hsv.h
+    INCLUDEPATH += qt
+
     # Plugin loader requires QPluginLoader (Qt5Core) and the QWidget plugin ABI
     SOURCES -= PluginManager.cpp
     HEADERS -= PluginManager.h
