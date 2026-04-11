@@ -63,12 +63,12 @@ jobs:
             exit 1
           }
 
-          # Stage the .exe + runtime DLLs together so the artifact is a complete bundle
+          # Stage the .exe + ALL runtime DLLs that qmake dropped next to it
           New-Item -ItemType Directory -Force -Path bundle
           Copy-Item release\OpenRGB-headless.exe bundle\
-          # Runtime DLLs that qmake's install rules dropped next to the .exe
-          if (Test-Path "release\libusb-1.0.dll") { Copy-Item release\libusb-1.0.dll bundle\ }
-          if (Test-Path "release\hidapi.dll")     { Copy-Item release\hidapi.dll     bundle\ }
+          Copy-Item release\*.dll bundle\ -ErrorAction SilentlyContinue
+          Write-Host "--- staged DLLs ---"
+          Get-ChildItem bundle\*.dll | Format-Table Name, Length
           # Re-bundle the LICENSE so GPL §3 redistribution requirements are met
           Copy-Item LICENSE bundle\LICENSE-OpenRGB.txt
           # Tag the build with the source URL

@@ -32,6 +32,9 @@ CONFIG(headless) {
     QT -= core gui widgets
     CONFIG -= lrelease embed_translations
     TRANSLATIONS =
+    # Console subsystem on Windows so the binary has stdout/stderr (instead
+    # of the default Qt-style GUI subsystem with no streams).
+    win32: CONFIG += console
 }
 
 #-----------------------------------------------------------------------------------------------#
