@@ -22,6 +22,19 @@ CONFIG +=   c++17                                                               
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 #-----------------------------------------------------------------------------------------------#
+# Headless build — strip Qt entirely (Widgets, Gui, Core), drop the GUI layer, plugin loader,  #
+# colour-wheel widget and per-platform suspend/resume listeners (which depend on QtDBus on     #
+# Linux and QAbstractNativeEventFilter on Windows). Activate with `qmake CONFIG+=headless`.    #
+#-----------------------------------------------------------------------------------------------#
+CONFIG(headless) {
+    message("Building OpenRGB headless (no Qt)")
+    DEFINES += OPENRGB_HEADLESS
+    QT -= core gui widgets
+    CONFIG -= lrelease embed_translations
+    TRANSLATIONS =
+}
+
+#-----------------------------------------------------------------------------------------------#
 # Application Configuration                                                                     #
 #-----------------------------------------------------------------------------------------------#
 MAJOR       = 0
@@ -321,6 +334,27 @@ TRANSLATIONS +=                                                                 
     qt/i18n/OpenRGB_uk_UA.ts                                                                    \
     qt/i18n/OpenRGB_zh_CN.ts                                                                    \
     qt/i18n/OpenRGB_zh_TW.ts                                                                    \
+
+#-----------------------------------------------------------------------------------------------#
+# Headless source exclusions — after all the cross-platform SOURCES += blocks above            #
+#-----------------------------------------------------------------------------------------------#
+CONFIG(headless) {
+    # Drop the entire qt/ folder (all GUI sources, headers, forms)
+    SOURCES -= $$GUI_CPP
+    HEADERS -= $$GUI_H
+    FORMS =
+
+    # Plugin loader requires QPluginLoader (Qt5Core) and the QWidget plugin ABI
+    SOURCES -= PluginManager.cpp
+    HEADERS -= PluginManager.h
+
+    # ColorWheel is a full QWidget — only used by the GUI
+    SOURCES -= dependencies/ColorWheel/ColorWheel.cpp
+    HEADERS -= dependencies/ColorWheel/ColorWheel.h
+
+    # The shared SuspendResume header is GUI-only (referenced by OpenRGBDialog)
+    HEADERS -= SuspendResume/SuspendResume.h
+}
 
 #-----------------------------------------------------------------------------------------------#
 # Windows-specific Configuration                                                                #
@@ -808,3 +842,24 @@ macx:contains(QMAKE_HOST.arch, x86_64) {
 DISTFILES += \
     debian/openrgb-udev.postinst \
     debian/openrgb.postinst
+
+#-----------------------------------------------------------------------------------------------#
+# Headless: drop the per-platform suspend/resume listeners. They depend on QtDBus on Linux/    #
+# FreeBSD and on QAbstractNativeEventFilter (Qt5Core) on Windows. The host that embeds the    #
+# headless server is expected to detect OS power events and bounce the subprocess on resume.  #
+#-----------------------------------------------------------------------------------------------#
+CONFIG(headless) {
+    win32 {
+        SOURCES -= SuspendResume/SuspendResume_Windows.cpp
+        HEADERS -= SuspendResume/SuspendResume_Windows.h
+    }
+    unix:!macx {
+        SOURCES -= SuspendResume/SuspendResume_Linux_FreeBSD.cpp
+        HEADERS -= SuspendResume/SuspendResume_Linux_FreeBSD.h
+        QT -= dbus
+    }
+    macx {
+        SOURCES -= SuspendResume/SuspendResume_MacOS.cpp
+        HEADERS -= SuspendResume/SuspendResume_MacOS.h
+    }
+}

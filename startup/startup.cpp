@@ -12,9 +12,15 @@
 #include "NetworkServer.h"
 #include "startup.h"
 
-#include <QApplication>
+#ifdef OPENRGB_HEADLESS
+#include <chrono>
+#include <thread>
+#endif
 
+#ifndef OPENRGB_HEADLESS
+#include <QApplication>
 #include "OpenRGBDialog.h"
+#endif
 
 #ifdef __APPLE__
 #include "macutils.h"
@@ -22,6 +28,7 @@
 
 #ifdef __linux__
 #include <csignal>
+#include <cstdlib>
 #endif
 
 /******************************************************************************************\
@@ -29,11 +36,19 @@
 *   Linux signal handler                                                                   *
 *                                                                                          *
 \******************************************************************************************/
-#ifdef __linux__
+#if defined(__linux__) && !defined(OPENRGB_HEADLESS)
 void sigHandler(int s)
 {
     std::signal(s, SIG_DFL);
     qApp->quit();
+}
+#endif
+
+#if defined(__linux__) && defined(OPENRGB_HEADLESS)
+void sigHandler(int s)
+{
+    std::signal(s, SIG_DFL);
+    std::exit(0);
 }
 #endif
 
@@ -52,6 +67,7 @@ int startup(int argc, char* argv[], unsigned int ret_flags)
     \*-----------------------------------------------------*/
     int exitval = EXIT_SUCCESS;
 
+#ifndef OPENRGB_HEADLESS
     /*-----------------------------------------------------*\
     | If the command line parser indicates that the GUI     |
     | should run, or if there were no command line          |
@@ -133,6 +149,7 @@ int startup(int argc, char* argv[], unsigned int ret_flags)
         exitval = a.exec();
     }
     else
+#endif // !OPENRGB_HEADLESS
     {
         /*-------------------------------------------------*\
         | If no GUI is needed, we let the background        |
@@ -141,12 +158,34 @@ int startup(int argc, char* argv[], unsigned int ret_flags)
         \*-------------------------------------------------*/
         ResourceManager::get()->WaitForInitialization();
 
+#ifdef OPENRGB_HEADLESS
+        /*-------------------------------------------------*\
+        | Headless build always runs the SDK server. The    |
+        | start_gui flag is set when no command-line args   |
+        | were given, so force-server in that case too.     |
+        \*-------------------------------------------------*/
+        ret_flags |= RET_FLAG_START_SERVER;
+#endif
+
         if(ret_flags & RET_FLAG_START_SERVER)
         {
             NetworkServer* server = ResourceManager::get()->GetServer();
             if(server)
             {
+#ifdef OPENRGB_HEADLESS
+                /*---------------------------------------------*\
+                | Block forever — keep the server running.      |
+                | Without this, main() returns immediately      |
+                | because the server runs on a background thread|
+                \*---------------------------------------------*/
+                while(server->GetOnline())
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
+                exitval = EXIT_SUCCESS;
+#else
                 exitval = !server->GetOnline();
+#endif
             }
             else
             {

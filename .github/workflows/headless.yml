@@ -1,0 +1,108 @@
+name: Headless build
+
+on:
+  push:
+    branches: [headless, main]
+  pull_request:
+    branches: [headless, main]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt (qmake only — headless build links no Qt libs)
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2019_64'
+          modules: ''
+          cache: true
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: qmake
+        shell: cmd
+        run: |
+          qmake OpenRGB.pro CONFIG+=release CONFIG+=headless
+
+      - name: nmake
+        shell: cmd
+        run: |
+          nmake
+
+      - name: Inspect output
+        shell: pwsh
+        run: |
+          if (Test-Path "release\OpenRGB.exe") {
+            $info = Get-Item "release\OpenRGB.exe"
+            Write-Host "release\OpenRGB.exe size: $([math]::Round($info.Length / 1MB, 2)) MiB"
+            Move-Item release\OpenRGB.exe release\OpenRGB-headless.exe
+          } elseif (Test-Path "OpenRGB.exe") {
+            $info = Get-Item "OpenRGB.exe"
+            Write-Host "OpenRGB.exe size: $([math]::Round($info.Length / 1MB, 2)) MiB"
+            Move-Item OpenRGB.exe OpenRGB-headless.exe
+          } else {
+            Write-Error "Build artifact missing!"
+            Get-ChildItem -Recurse -Filter "*.exe"
+            exit 1
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenRGB-headless-windows-x64
+          path: |
+            release/OpenRGB-headless.exe
+            OpenRGB-headless.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            qtbase5-dev qttools5-dev qttools5-dev-tools \
+            libusb-1.0-0-dev libhidapi-dev libmbedtls-dev \
+            pkg-config build-essential
+
+      - name: qmake
+        run: |
+          qmake OpenRGB.pro CONFIG+=release CONFIG+=headless
+
+      - name: make
+        run: |
+          make -j$(nproc)
+
+      - name: Inspect output
+        run: |
+          if [ -f openrgb ]; then
+            ls -lh openrgb
+            mv openrgb OpenRGB-headless
+            file OpenRGB-headless
+            ldd OpenRGB-headless || true
+            echo "--- Qt libs in dependency tree ---"
+            ldd OpenRGB-headless | grep -i 'qt\|Qt' || echo "(none — Qt successfully removed)"
+          else
+            echo "Build artifact missing!"
+            find . -maxdepth 2 -name 'openrgb*' -o -name 'OpenRGB*'
+            exit 1
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenRGB-headless-linux-x64
+          path: OpenRGB-headless
+          if-no-files-found: error

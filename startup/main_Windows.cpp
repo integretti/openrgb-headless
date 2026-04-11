@@ -15,7 +15,9 @@
 #include <windows.h>
 #include <thread>
 
+#ifndef OPENRGB_HEADLESS
 #include <QApplication>
+#endif
 
 #include "cli.h"
 #include "startup.h"
