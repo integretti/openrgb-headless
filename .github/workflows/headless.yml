@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Qt (qmake only — headless build links no Qt libs)
+      - name: Install Qt + jom (qmake/jom only — headless build links no Qt libs)
         uses: jurplel/install-qt-action@v4
         with:
           version: '5.15.2'
@@ -21,6 +21,7 @@ jobs:
           target: 'desktop'
           arch: 'win64_msvc2019_64'
           modules: ''
+          tools: 'tools_ifw tools_qtcreator,qt.tools.qtcreator'
           cache: true
 
       - name: Set up MSVC
@@ -28,17 +29,24 @@ jobs:
         with:
           arch: x64
 
+      - name: Install jom (parallel nmake replacement)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://download.qt.io/official_releases/jom/jom_1_1_4.zip -OutFile jom.zip
+          Expand-Archive -Path jom.zip -DestinationPath jom
+          Add-Content -Path $env:GITHUB_PATH -Value "$pwd\jom"
+
       - name: qmake
         shell: cmd
         run: |
           qmake OpenRGB.pro CONFIG+=release CONFIG+=headless
 
-      - name: nmake
+      - name: jom (parallel build)
         shell: cmd
         run: |
-          nmake
+          jom -j %NUMBER_OF_PROCESSORS%
 
-      - name: Inspect output
+      - name: Inspect output and stage bundle
         shell: pwsh
         run: |
           if (Test-Path "release\OpenRGB.exe") {
@@ -55,13 +63,28 @@ jobs:
             exit 1
           }
 
+          # Stage the .exe + runtime DLLs together so the artifact is a complete bundle
+          New-Item -ItemType Directory -Force -Path bundle
+          Copy-Item release\OpenRGB-headless.exe bundle\
+          # Runtime DLLs that qmake's install rules dropped next to the .exe
+          if (Test-Path "release\libusb-1.0.dll") { Copy-Item release\libusb-1.0.dll bundle\ }
+          if (Test-Path "release\hidapi.dll")     { Copy-Item release\hidapi.dll     bundle\ }
+          # Re-bundle the LICENSE so GPL §3 redistribution requirements are met
+          Copy-Item LICENSE bundle\LICENSE-OpenRGB.txt
+          # Tag the build with the source URL
+          Set-Content -Path bundle\README.txt -Value @"
+          OpenRGB headless build
+          ----------------------
+          Source: https://github.com/integretti/openrgb-headless
+          License: GPL-2.0-or-later (see LICENSE-OpenRGB.txt)
+          "@
+          Get-ChildItem bundle | Format-Table Name, Length
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: OpenRGB-headless-windows-x64
-          path: |
-            release/OpenRGB-headless.exe
-            OpenRGB-headless.exe
+          path: bundle/**
           if-no-files-found: error
 
   linux:
@@ -85,7 +108,7 @@ jobs:
         run: |
           make -j$(nproc)
 
-      - name: Inspect output
+      - name: Inspect output and stage bundle
         run: |
           if [ -f openrgb ]; then
             ls -lh openrgb
@@ -100,9 +123,20 @@ jobs:
             exit 1
           fi
 
+          mkdir -p bundle
+          cp OpenRGB-headless bundle/
+          cp LICENSE bundle/LICENSE-OpenRGB.txt
+          cat > bundle/README.txt <<'EOF'
+          OpenRGB headless build
+          ----------------------
+          Source: https://github.com/integretti/openrgb-headless
+          License: GPL-2.0-or-later (see LICENSE-OpenRGB.txt)
+          EOF
+          ls -lh bundle/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: OpenRGB-headless-linux-x64
-          path: OpenRGB-headless
+          path: bundle/**
           if-no-files-found: error
