@@ -18,10 +18,6 @@
 io_connect_t macUSPCIO_driver_connection;
 #endif
 
-#ifdef __APPLE__
-#include "macutils.h"
-#endif
-
 using namespace std::chrono_literals;
 
 /*---------------------------------------------------------*\

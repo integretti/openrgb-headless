@@ -1,175 +1,137 @@
-## ![OpenRGB](Documentation/Images/OpenRGB.png "OpenRGB Logo")
+# OpenRGB Headless
 
-![Pipeline Status](https://gitlab.com/CalcProgrammer1/OpenRGB/badges/master/pipeline.svg)
+A headless fork of [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) that strips
+the entire Qt dependency (Qt5Widgets, Qt5Gui, Qt5Core, Qt5DBus) and ships only the
+SDK server. The result is a small, GUI-less binary that exposes the OpenRGB SDK over
+its standard TCP port (default `6742`) and nothing else: no GUI, no plugin loader,
+no system tray, no installer-bundled `.dll`s for desktop frameworks.
 
-One of the biggest complaints about RGB is the software ecosystem surrounding it.  Every manufacturer has their own app, their own brand, their own style.  If you want to mix and match devices, you end up with a ton of conflicting, functionally identical apps competing for your background resources.  On top of that, these apps are proprietary and Windows-only.  Some even require online accounts.  What if there was a way to control all of your RGB devices from a single app, on Windows, Linux, and MacOS, without any nonsense?  That is what OpenRGB sets out to achieve.  One app to rule them all.
+The 183 device controllers and the SDK protocol are unchanged from upstream.
 
-## Features
+| Build | Size |
+|---|---|
+| Upstream OpenRGB Windows portable | ~13 MiB download / ~25 MiB extracted |
+| This fork (Windows x64, with hidapi/libusb/PawnIO DLLs) | **~7.4 MiB** |
+| This fork (Linux x64, dynamic) | **~11 MiB** |
 
-* Set colors and select effect modes for a wide variety of RGB hardware
-* Save and load profiles
-* Control lighting from third party software using the OpenRGB SDK
-* Command line interface
-* Connect multiple instances of OpenRGB to synchronize lighting across multiple PCs
-* Can operate standalone or in a client/headless server configuration
-* View device information
-* No official/manufacturer software required
-* Graphical view of device LEDs makes creating custom patterns easy
+## Why
 
-![OpenRGB_Device_View](Documentation/Images/OpenRGB_Screenshot.png "OpenRGB Device View Screenshot")
+Upstream OpenRGB has [an open feature request for a headless mode](https://gitlab.com/CalcProgrammer1/OpenRGB/-/issues/2012)
+that has been pending for years. This fork implements it as the smallest possible
+patch on top of upstream. It exists for embedding OpenRGB inside other services as
+a child process — the host speaks the SDK over loopback TCP and gets full
+device-control access without bundling 12+ MiB of Qt runtime DLLs the SDK server
+never actually uses.
 
-## Website
+The fork stays close to upstream so it can keep merging upstream device-controller
+work, hardware detector improvements, and SDK protocol fixes. See
+[`MAINTAINING.md`](MAINTAINING.md) for the upstream-sync workflow.
 
-* Check out our website at [openrgb.org](https://openrgb.org)
+## What was removed vs. upstream
 
-## Supported Devices
+Everything that exists only to drive a graphical interface:
 
-* See the [Supported Devices](https://openrgb.org/devices.html) page for the current list of supported devices.
+- `qt/` — every dialog, page, model, dialog .ui form, theme, font, icon, translation
+- `dependencies/ColorWheel/` — pure `QWidget` colour-picker, only used by the GUI
+- `PluginManager.cpp/h` and `OpenRGBPluginInterface.h` — the GUI plugin loader (uses
+  `QPluginLoader` and the `QWidget` plugin ABI)
+- `SuspendResume/` — every per-platform listener, all of which depended on
+  `QAbstractNativeEventFilter` (Windows) or `QDBusConnection` (Linux/FreeBSD).
+  The host that embeds the headless server is expected to detect OS power events
+  itself and bounce the subprocess on resume.
+- `Documentation/Images/` — GUI screenshots
+- All Linux desktop / icon / AppStream metainfo / systemd / tmpfiles install rules
+- The Windows `.exe` icon (`RC_ICONS`) — headless tools don't need one
+- The macOS `.app` bundle config (Info.plist, .icns) — headless tools aren't bundles
+- All translation files (`qt/i18n/*.ts`) and the `lrelease` / `embed_translations`
+  qmake configs
 
-## WARNING!
+## What stayed
 
-This project interacts directly with hardware using reverse engineered protocols.  While we do our best to make sure we're sending the right data, there is always some risk in sending data to hardware when we don't understand exactly how that hardware works.  There have been issues in the past with certain hardware getting damaged/bricked and we have either disabled or fixed the offending code.  That said, with OpenRGB always changing and the landscape of RGB devices being of widely varying quality, we can't guarantee it won't happen again.  By installing and using OpenRGB you accept this risk.
+Everything that's not GUI-bound:
 
-## Download OpenRGB
+- All ~183 device controllers under `Controllers/`
+- The full OpenRGB SDK TCP protocol (`NetworkServer.cpp`, `NetworkProtocol.cpp`)
+- All hardware detectors (`i2c_smbus/`, `hidapi_wrapper/`, `serial_port/`,
+  `interop/`, `SPDAccessor/`)
+- `ResourceManager`, `SettingsManager`, `ProfileManager`, `LogManager` — all
+  Qt-free in upstream
+- The `cli.cpp` CLI parser — flags that don't make sense headless
+  (`--gui`, `--start-minimized`, `--client`) are accepted but ignored
+- Cross-platform: Windows + Linux supported, macOS source paths preserved
+- The qmake build system — kept as-is so upstream merges remain straightforward
 
-  * Pre-built binaries are available for the following platforms:
-    * Windows
-    * Linux (AppImage, .deb, and .rpm)
-    * MacOS
-  * Released versions are available to download on [OpenRGB.org](https://openrgb.org/releases.html) or under [Releases](https://gitlab.com/CalcProgrammer1/OpenRGB/-/releases/permalink/latest).
-  * Experimental (aka Pipeline) versions are available to download on [OpenRGB.org](https://openrgb.org/index.html#pl).
-  * On Windows, you will need the **Microsoft Visual 2019 C++ runtime** installed.  You can get it [here](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#latest-supported-redistributable-version).
-  * An unofficial Flatpak release is [available on Flathub](https://flathub.org/apps/details/org.openrgb.OpenRGB)
-    * Note: If using the AppImage or Flatpak versions, ensure you [install the latest udev rules](Documentation/UdevRules.md).
-  * Released versions are officially packaged for various distributions including Alpine, Fedora, and Arch.
-  * Arch users can also install from the [Extra repository](https://archlinux.org/packages/extra/x86_64/openrgb/) or from the AUR for the [pipeline](https://aur.archlinux.org/packages/openrgb-git/) version.
+## License
 
-## Compile OpenRGB
+OpenRGB is licensed under the **GNU General Public License, version 2 or later**
+(GPL-2.0-or-later). This fork inherits the same license. The
+[`LICENSE`](LICENSE) file in the repo root applies to the entire codebase.
 
-  * Instructions for compiling from source are [available here](Documentation/Compiling.md).
+The original upstream copyright belongs to Adam Honse (CalcProgrammer1) and
+contributors. The headless patches are visible in [the diff against upstream
+master](https://github.com/integretti/openrgb-headless/compare/main...headless).
 
-## Setup Device Access
+## Building
 
-  * After installing OpenRGB, please see the [SMBus Access](Documentation/SMBusAccess.md) and [USB Access](Documentation/USBAccess.md) pages for instructions on setting up access to your RGB devices.
+### Windows (MSVC + qmake/jom)
 
-## Join Our Discord
+```cmd
+qmake OpenRGB.pro CONFIG+=release
+jom -j %NUMBER_OF_PROCESSORS%
+```
 
-* https://discord.gg/AQwjJPY
+You still need a Qt5 install for `qmake` itself (it's the build tool), but the
+resulting `OpenRGB.exe` links zero Qt libraries.
 
-## Follow Us On Mastodon
+### Linux
 
-* https://floss.social/@OpenRGB
+```bash
+sudo apt install qtbase5-dev libusb-1.0-0-dev libhidapi-dev libmbedtls-dev pkg-config build-essential
+qmake OpenRGB.pro CONFIG+=release
+make -j$(nproc)
+```
 
-## Visit Our Lemmy Community
+Verify the binary is Qt-free:
 
-* https://lemmy.ml/c/OpenRGB
+```bash
+ldd ./openrgb | grep -i qt
+# (should produce no output)
+```
 
-## How-Tos and FAQs
+## Running
 
-* [Windows Setup and Usage](https://gitlab.com/OpenRGBDevelopers/OpenRGB-Wiki/-/blob/stable/User-Documentation/OpenRGB-Windows-Setup-and-Usage.md)
-* [Frequently Asked Questions](https://gitlab.com/OpenRGBDevelopers/OpenRGB-Wiki/-/blob/stable/User-Documentation/Frequently-Asked-Questions.md)
+```
+OpenRGB --server --server-port 6742 --noautoconnect
+```
 
-## Support OpenRGB
+The TCP SDK server listens on the port and accepts clients. There is no GUI, no
+window, no tray icon — it is a pure background process. `--noautoconnect`
+prevents auto-connecting to a remote OpenRGB instance and is the right default
+for an embedded server.
 
-* OpenRGB is a project I created to solve a problem I had with the RGB ecosystem.  My goal isn't to make money off of this project.  That said, people have requested to donate, and donations allow me to buy more RGB stuff to reverse engineer.
-* [Donate via PayPal](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=4VPTFMD3G4QVG&item_name=OpenRGB+Development&currency_code=USD&source=url)
-* [Become a Patron](https://www.patreon.com/CalcProgrammer1) (I'm not doing any Patreon-exclusive content, it's purely for donation)
-* Donate via Bitcoin: 1N83YPu7btXYadPS1neB9zX7X1QTdpyZQ
+CLI flags supported:
 
-## History of OpenRGB
+| Flag | Effect |
+|---|---|
+| `--server` | Run the SDK server (always implied in this fork) |
+| `--server-port <n>` | Port to listen on (default 6742) |
+| `--noautoconnect` | Don't auto-connect to a remote OpenRGB instance |
+| `--nodetect` | Skip device detection |
+| `--config <dir>` | Configuration directory (defaults to platform-specific) |
+| `--profile <name>` | Load a profile at startup |
+| `--list-devices` | Print detected devices and exit |
+| `--loglevel <level>` | `fatal` / `error` / `message` / `verbose` / `debug` / `trace` |
 
-* OpenRGB is a continuation of OpenAuraSDK, which itself was created out of reverse engineering work done on the Keyboard Visualizer project.  For a complete history of the RGB projects that led to OpenRGB's creation, see the [History page](https://gitlab.com/OpenRGBDevelopers/OpenRGB-Wiki/-/blob/stable/History-of-OpenRGB.md).
+GUI-only flags (`--gui`, `--start-minimized`, `--client`) are accepted but ignored.
 
-## Contributing
+## Maintaining
 
-* Want to contribute support for a new device?  Check out the [RGBController API](Documentation/RGBControllerAPI.md) page for documentation of how OpenRGB implements device control.
-* Want to create a new OpenRGB SDK client implementation?  Check out the [OpenRGB SDK Documentation](Documentation/OpenRGBSDK.md) page for documentation of how the OpenRGB SDK network protocol functions.
-* Please read the [Contributing Guidelines](CONTRIBUTING.md) before starting work on your new changes.
+See [`MAINTAINING.md`](MAINTAINING.md) for the upstream-sync workflow. The short
+version: track `upstream/master`, merge it into `main`, then merge `main` into
+`headless`. Re-deletion of any GUI files upstream may have re-added is the only
+recurring manual step.
 
-## OpenRGB SDK
+## Credits
 
-* OpenRGB provides a network interface for controlling supported RGB devices from other software.  These projects implement the OpenRGB SDK and provide additional ways for you to control your lighting setup.
-
-  * [OpenRGB Python Client](https://github.com/jath03/openrgb-python) (by jath03)
-  * [OpenRGB Python Client (deprecated)](https://github.com/bahorn/OpenRGB-PyClient) (by bahorn)  
-  * [OpenRGB Node.js Client](https://github.com/vlakreeh/openrgb) (by vlakreeh)
-  * [D-Bus Connector for OpenRGB](https://github.com/Vinno97/OpenRGB-DBus-Connector) (by Vinno97)
-  * [OpenRGB.NET - C# OpenRGB Client](https://github.com/diogotr7/OpenRGB.NET) (by diogotr7)
-  * [OpenRGB-Client - Java Client](https://gitlab.com/mguimard/openrgb-client) (by morg)
-  * [OpenRGB-SDK - NodeJS client](https://www.npmjs.com/package/openrgb-sdk) (by Mola19)
-  * [OpenRGB-cppSDK - C++ client](https://github.com/Youda008/OpenRGB-cppSDK) (by Youda008)
-  * [openrgb-rs2 - Rust client](https://github.com/Achtuur/openrgb-rs2) (by nicoulaj & Achtuur)
-
-## Applications Supporting OpenRGB SDK
-
-* While OpenRGB itself only provides control over the lighting effects built into hardware, several open source applications can use the OpenRGB SDK to provide synchronized lighting effects for your devices.
-
-  * [Keyboard Visualizer](https://gitlab.com/CalcProgrammer1/KeyboardVisualizer) (by CalcProgrammer1)
-  * [OpenRGB E1.31 Receiver](https://gitlab.com/CalcProgrammer1/OpenRGBE131Receiver) (by me)
-  * [Aurora](https://github.com/Aurora-RGB/Aurora) (OpenRGB support added by diogotr7)
-  * [Artemis](https://github.com/Artemis-RGB/Artemis) (OpenRGB support added by diogotr7)
-  * [RemoteLight](https://github.com/Drumber/RemoteLight) (by Drumber, requires OpenRGB plugin)
-  * [OpenRGB-python-FX](https://github.com/herosilas12/OpenRGB-python-FX) (by herosilas12)
-  * [AllMyLights](https://github.com/sparten11740/allmylights) (by sparten11740)
-  * [OpenRGBRemote](https://gitlab.com/mguimard/openrgbremote) (by morg)
-  * [PiLED](https://github.com/PolisanTheEasyNick/PiLED) (by PolisanTheEasyNick)
-
-## OpenRGB Plugins
-
-* OpenRGB provides a plugin interface for adding features to the OpenRGB application.  The following projects provide additional functionality in the form of plugins.
-
-  * [OpenRGB Effects Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBEffectsPlugin) (by herosilas12, morg)
-  * [OpenRGB Visual Map Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBVisualMapPlugin) (by morg)
-  * [OpenRGB E1.31 Receiver Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBE131ReceiverPlugin) (by CalcProgrammer1)
-  * [OpenRGB Scheduler Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBSchedulerPlugin) (by morg)
-  * [OpenRGB Skin Plugin](https://gitlab.com/OpenRGBDevelopers/openrgbskinplugin) (by morg)
-  * [OpenRGB Hardware Sync Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBHardwareSyncPlugin) (by morg)
-  * [OpenRGB Http Hook Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBHttpHookPlugin) (by morg)
-  * [OpenRGB Razer Extras Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBRazerExtrasPlugin) (by morg)
-  * [OpenRGB Fan Hardware Sync Plugin](https://gitlab.com/OpenRGBDevelopers/OpenRGBFanSyncPlugin) (by Shady)
-  * [OpenRGB Ambient Plugin](https://github.com/krojew/OpenRGB-Ambient) (by krojew)
-
-## Projects Used
-
-* OpenRGB directly relies upon these projects.
-  * PawnIO: https://pawnio.eu/
-  * libusb: https://github.com/libusb/libusb
-  * hidapi: https://github.com/libusb/hidapi
-  * libe131: https://github.com/hhromic/libe131
-  * NVFC: https://github.com/graphitemaster/NVFC
-  * Qt-Plus (ColorWheel): https://github.com/liuyanghejerry/Qt-Plus
-  * AMD ADL Libraries: https://github.com/GPUOpen-LibrariesAndSDKs/display-library
-  * hueplusplus: https://github.com/enwi/hueplusplus
-  * httplib: https://github.com/yhirose/cpp-httplib
-  * mdns: https://github.com/mjansson/mdns
-  * macUSPCIO: https://github.com/ShadyNawara/macUSPCIO
-
-## Projects Researched
-
-* While no code from these projects directly made its way into OpenRGB, these projects have been invaluable resources for protocol information.
-
-  * OpenRazer: https://github.com/openrazer/openrazer
-  * OpenRazer-Win32: https://github.com/CalcProgrammer1/openrazer-win32
-  * ckb-next: https://github.com/ckb-next/ckb-next
-  * linux_thermaltake_riing: https://github.com/chestm007/linux_thermaltake_riing
-  * Aura Addressable Header Controller: https://gitlab.com/cneil02/aura-addressable-header-controller
-  * OpenPyAURA: https://gitlab.com/thelastguardian/openpyaura
-  * AsrLed: https://github.com/EUA/AsrLed
-  * asrock-leds: https://github.com/RattyDAVE/asrock-leds
-  * hue-plus: https://github.com/kusti8/hue-plus
-  * rogauracore: https://github.com/wroberts/rogauracore
-  * msi-rgb: https://github.com/nagisa/msi-rgb
-  * OpenCorsairLink: https://github.com/audiohacked/OpenCorsairLink
-  * msi-keyboard: https://github.com/bparker06/msi-keyboard
-  * rivalcfg: https://github.com/flozz/rivalcfg
-  * VRMTool: https://github.com/rbrune/VRMtool
-  * g810-led: https://github.com/MatMoul/g810-led
-  * liquidctl: https://github.com/jonasmalacofilho/liquidctl
-  * Annemone: https://github.com/manualmanul/Annemone
-  * libcmmk: https://github.com/chmod222/libcmmk
-  * Signal RGB Plugins: https://gitlab.com/signalrgb/signal-plugins/-/tree/master/Plugins
-  * k550-macos: https://github.com/vookimedlo/ck550-macos/tree/master
-  * luxafor-python: https://github.com/vmitchell85/luxafor-python
-  * dreamcheekyusb: https://github.com/gbrayut/dreamcheekyusb
-  * omen-light: https://github.com/chiahsing/omen-light
-  
+All upstream code © Adam Honse (CalcProgrammer1) and the OpenRGB contributors.
+Headless build patches by [@integretti](https://github.com/integretti).

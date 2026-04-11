@@ -39,7 +39,7 @@ jobs:
       - name: qmake
         shell: cmd
         run: |
-          qmake OpenRGB.pro CONFIG+=release CONFIG+=headless
+          qmake OpenRGB.pro CONFIG+=release
 
       - name: jom (parallel build)
         shell: cmd
@@ -102,7 +102,7 @@ jobs:
 
       - name: qmake
         run: |
-          qmake OpenRGB.pro CONFIG+=release CONFIG+=headless
+          qmake OpenRGB.pro CONFIG+=release
 
       - name: make
         run: |
