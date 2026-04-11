@@ -33,8 +33,11 @@ CONFIG(headless) {
     CONFIG -= lrelease embed_translations
     TRANSLATIONS =
     # Console subsystem on Windows so the binary has stdout/stderr (instead
-    # of the default Qt-style GUI subsystem with no streams).
+    # of the default Qt-style GUI subsystem with no streams). Also link the
+    # Win32 libraries that the Qt config used to drag in transitively
+    # (CommandLineToArgvW, SHGetFolderPathA, registry, sockets, ws2_32 etc.)
     win32: CONFIG += console
+    win32: LIBS += -lshell32 -ladvapi32 -luser32 -lole32 -lws2_32 -liphlpapi -lsetupapi -lshlwapi
 }
 
 #-----------------------------------------------------------------------------------------------#
