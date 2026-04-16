@@ -110,42 +110,59 @@ When upstream merges touch `OpenRGB.pro`:
 
 ## Fork-specific patches (not upstream-identical)
 
-### ResourceManager.cpp - detector exception safety
+### ResourceManager.cpp - detector exception safety + per-detector timeouts
 
-**What we changed:** Wrapped all 8 detector callback invocations inside
-`DetectDevicesCoroutine()` in `try { ... } catch(std::exception) / catch(...)`
-blocks. Covers I2C device detectors, I2C DIMM detectors, I2C PCI detectors,
-HID detectors (both safe-mode and normal-mode), HID wrapped detectors, libusb
-HID wrapped detectors, and miscellaneous device detectors.
+**What we changed:**
 
-**Why:** Upstream's detection loop has no exception handling per detector. If any
-single detector throws (e.g. `std::bad_alloc` from `new`, `std::runtime_error`
-from a DMI read), the entire `DetectDevicesCoroutine` unwinds, `DetectDeviceMutex`
-is never unlocked, and `hid_free_enumeration` is never called. All devices after
-the failing one are lost. This patch catches the exception, logs it via
-`LOG_ERROR`, and lets the loop continue to the next detector.
+1. Added `#include <future>` to the includes.
+2. Added a static helper `RunDetectorWithTimeout(fn, name, timeout_ms)` and
+   constant `DETECTOR_TIMEOUT_MS = 5000` defined just above
+   `DetectDevicesCoroutine()`. The helper runs the detector callback on a
+   worker thread; if it doesn't return within `timeout_ms`, the helper logs
+   the timeout, detaches the thread, and returns. Exceptions are also caught
+   and logged.
+3. Replaced all 8 raw detector-invocation sites in `DetectDevicesCoroutine()`
+   with calls to `RunDetectorWithTimeout([&]() { <original call>; }, ...)`.
+   Sites: I2C device, I2C DIMM, I2C PCI, HID safe-mode, HID normal, HID
+   wrapped (normal), HID wrapped (libusb/Linux), and miscellaneous device.
 
-**Conflict resolution:** If upstream touches the detector-invocation lines, merge
-their changes into the body of our `try` block. The catch blocks stay the same.
-The pattern is always:
+**Why:** Upstream's detection loop runs detectors sequentially with no fault
+isolation. Two failure modes break the entire detection pass:
+
+- **Exceptions:** `std::bad_alloc` from `new`, `std::runtime_error` from DMI
+  reads, etc. - the coroutine unwinds, `DetectDeviceMutex` is leaked, and all
+  later detectors never run.
+- **Hangs:** A detector matches a USB device by VID/PID but the device
+  doesn't speak the expected protocol. The detector's `hid_get_feature_report`
+  blocks forever and detection stops mid-pass. Observed in practice with the
+  Corsair M65 PRO detector matching a non-Corsair device on VID `1B1C` PID
+  `1B2E`.
+
+The timeout/exception helper isolates each detector. Failures log a single
+`LOG_ERROR` and the next detector still runs.
+
+**Detached-thread caveat:** A timed-out worker thread is detached, not killed
+(C++ has no portable thread-cancel). It continues holding its HID handle
+until the underlying syscall returns. This is acceptable: the alternative is
+the entire detection pass blocking forever.
+
+**Conflict resolution:** If upstream touches one of the detector-invocation
+lines, merge their change into the body of the lambda. The helper signature
+stays the same. Pattern:
 
 ```cpp
-try
-{
-    <upstream's detector call>;
-}
-catch(const std::exception& e)
-{
-    LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
-}
-catch(...)
-{
-    LOG_ERROR("[%s] detector threw unknown exception", detection_string);
-}
+RunDetectorWithTimeout(
+    [&]() { <upstream's detector call>; },
+    detection_string,
+    DETECTOR_TIMEOUT_MS);
 ```
 
-**Upstream PR candidate:** Yes - this fix is universally correct and should be
-submitted upstream. If accepted, we can drop this patch on the next sync.
+If upstream adds a new detector category, wrap its invocation the same way.
+
+**Upstream PR candidate:** Yes - both the exception-handling and the timeout
+mechanism are universally useful. SignalRGB famously isolates detectors;
+upstream OpenRGB would benefit from the same. If accepted, we drop this patch
+on the next sync.
 
 ## Verifying after a merge
 
