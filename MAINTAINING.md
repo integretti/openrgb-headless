@@ -108,6 +108,45 @@ When upstream merges touch `OpenRGB.pro`:
 6. **Upstream changed CLI flags** in `cli.cpp`: take their changes. We support
    the same CLI surface; our `startup/startup.cpp` ignores GUI-only flags.
 
+## Fork-specific patches (not upstream-identical)
+
+### ResourceManager.cpp - detector exception safety
+
+**What we changed:** Wrapped all 8 detector callback invocations inside
+`DetectDevicesCoroutine()` in `try { ... } catch(std::exception) / catch(...)`
+blocks. Covers I2C device detectors, I2C DIMM detectors, I2C PCI detectors,
+HID detectors (both safe-mode and normal-mode), HID wrapped detectors, libusb
+HID wrapped detectors, and miscellaneous device detectors.
+
+**Why:** Upstream's detection loop has no exception handling per detector. If any
+single detector throws (e.g. `std::bad_alloc` from `new`, `std::runtime_error`
+from a DMI read), the entire `DetectDevicesCoroutine` unwinds, `DetectDeviceMutex`
+is never unlocked, and `hid_free_enumeration` is never called. All devices after
+the failing one are lost. This patch catches the exception, logs it via
+`LOG_ERROR`, and lets the loop continue to the next detector.
+
+**Conflict resolution:** If upstream touches the detector-invocation lines, merge
+their changes into the body of our `try` block. The catch blocks stay the same.
+The pattern is always:
+
+```cpp
+try
+{
+    <upstream's detector call>;
+}
+catch(const std::exception& e)
+{
+    LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
+}
+catch(...)
+{
+    LOG_ERROR("[%s] detector threw unknown exception", detection_string);
+}
+```
+
+**Upstream PR candidate:** Yes - this fix is universally correct and should be
+submitted upstream. If accepted, we can drop this patch on the next sync.
+
 ## Verifying after a merge
 
 The CI workflow at `.github/workflows/headless.yml` builds Windows + Linux on

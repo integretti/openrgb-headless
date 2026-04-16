@@ -1212,7 +1212,18 @@ void ResourceManager::DetectDevicesCoroutine()
         {
             DetectionProgressChanged();
 
-            i2c_device_detectors[i2c_detector_idx](busses);
+            try
+            {
+                i2c_device_detectors[i2c_detector_idx](busses);
+            }
+            catch(const std::exception& e)
+            {
+                LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
+            }
+            catch(...)
+            {
+                LOG_ERROR("[%s] detector threw unknown exception", detection_string);
+            }
         }
 
         /*-------------------------------------------------*\
@@ -1284,8 +1295,19 @@ void ResourceManager::DetectDevicesCoroutine()
                     {
                         DetectionProgressChanged();
 
-                        std::vector<SPDWrapper*> matching_slots = slots_with_jedec(slots, i2c_dimm_device_detectors[i2c_detector_idx].jedec_id);
-                        i2c_dimm_device_detectors[i2c_detector_idx].function(busses[bus], matching_slots, i2c_dimm_device_detectors[i2c_detector_idx].name);
+                        try
+                        {
+                            std::vector<SPDWrapper*> matching_slots = slots_with_jedec(slots, i2c_dimm_device_detectors[i2c_detector_idx].jedec_id);
+                            i2c_dimm_device_detectors[i2c_detector_idx].function(busses[bus], matching_slots, i2c_dimm_device_detectors[i2c_detector_idx].name);
+                        }
+                        catch(const std::exception& e)
+                        {
+                            LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
+                        }
+                        catch(...)
+                        {
+                            LOG_ERROR("[%s] detector threw unknown exception", detection_string);
+                        }
                     }
 
                     LOG_TRACE("[%s] detection end", detection_string);
@@ -1332,7 +1354,18 @@ void ResourceManager::DetectDevicesCoroutine()
                    busses[bus]->pci_subsystem_vendor == i2c_pci_device_detectors[i2c_detector_idx].subven_id &&
                    busses[bus]->pci_subsystem_device == i2c_pci_device_detectors[i2c_detector_idx].subdev_id)
                 {
-                    i2c_pci_device_detectors[i2c_detector_idx].function(busses[bus], i2c_pci_device_detectors[i2c_detector_idx].i2c_addr, i2c_pci_device_detectors[i2c_detector_idx].name);
+                    try
+                    {
+                        i2c_pci_device_detectors[i2c_detector_idx].function(busses[bus], i2c_pci_device_detectors[i2c_detector_idx].i2c_addr, i2c_pci_device_detectors[i2c_detector_idx].name);
+                    }
+                    catch(const std::exception& e)
+                    {
+                        LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
+                    }
+                    catch(...)
+                    {
+                        LOG_ERROR("[%s] detector threw unknown exception", detection_string);
+                    }
                 }
             }
         }
@@ -1397,7 +1430,18 @@ void ResourceManager::DetectDevicesCoroutine()
                     {
                         DetectionProgressChanged();
 
-                        detector.function(current_hid_device, hid_device_detectors[hid_detector_idx].name);
+                        try
+                        {
+                            detector.function(current_hid_device, hid_device_detectors[hid_detector_idx].name);
+                        }
+                        catch(const std::exception& e)
+                        {
+                            LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
+                        }
+                        catch(...)
+                        {
+                            LOG_ERROR("[%s] detector threw unknown exception", detection_string);
+                        }
 
                         LOG_TRACE("[%s] detection end", detection_string);
                     }
@@ -1455,7 +1499,18 @@ void ResourceManager::DetectDevicesCoroutine()
                     {
                         DetectionProgressChanged();
 
-                        detector.function(current_hid_device, hid_device_detectors[hid_detector_idx].name);
+                        try
+                        {
+                            detector.function(current_hid_device, hid_device_detectors[hid_detector_idx].name);
+                        }
+                        catch(const std::exception& e)
+                        {
+                            LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
+                        }
+                        catch(...)
+                        {
+                            LOG_ERROR("[%s] detector threw unknown exception", detection_string);
+                        }
                     }
                 }
             }
@@ -1488,7 +1543,18 @@ void ResourceManager::DetectDevicesCoroutine()
                     {
                         DetectionProgressChanged();
 
-                        detector.function(default_wrapper, current_hid_device, hid_wrapped_device_detectors[hid_detector_idx].name);
+                        try
+                        {
+                            detector.function(default_wrapper, current_hid_device, hid_wrapped_device_detectors[hid_detector_idx].name);
+                        }
+                        catch(const std::exception& e)
+                        {
+                            LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
+                        }
+                        catch(...)
+                        {
+                            LOG_ERROR("[%s] detector threw unknown exception", detection_string);
+                        }
                     }
                 }
             }
@@ -1602,7 +1668,18 @@ void ResourceManager::DetectDevicesCoroutine()
                     {
                         DetectionProgressChanged();
 
-                        detector.function(wrapper, current_hid_device, detector.name);
+                        try
+                        {
+                            detector.function(wrapper, current_hid_device, detector.name);
+                        }
+                        catch(const std::exception& e)
+                        {
+                            LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
+                        }
+                        catch(...)
+                        {
+                            LOG_ERROR("[%s] detector threw unknown exception", detection_string);
+                        }
                     }
                 }
             }
@@ -1656,7 +1733,18 @@ void ResourceManager::DetectDevicesCoroutine()
         {
             DetectionProgressChanged();
 
-            device_detectors[detector_idx]();
+            try
+            {
+                device_detectors[detector_idx]();
+            }
+            catch(const std::exception& e)
+            {
+                LOG_ERROR("[%s] detector threw: %s", detection_string, e.what());
+            }
+            catch(...)
+            {
+                LOG_ERROR("[%s] detector threw unknown exception", detection_string);
+            }
         }
 
         LOG_TRACE("[%s] detection end", detection_string);
