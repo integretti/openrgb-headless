@@ -30,6 +30,7 @@
 #include "NetworkServer.h"
 #include "filesystem.h"
 #include "StringUtils.h"
+#include "RGBController_Dummy.h"
 
 /*---------------------------------------------------------*\
 | Translation Strings                                       |
@@ -1055,6 +1056,30 @@ void ResourceManager::DisableDetection()
 
 static const unsigned int DETECTOR_TIMEOUT_MS = 5000;
 
+/*-------------------------------------------------------------------------*\
+| When a detector fails (timeout or exception) we still want the client to  |
+| know a device was found but could not be driven. We register an empty     |
+| RGBController_Dummy with the detector's name and nothing else - no zones, |
+| no modes, no LEDs, no segments. The SDK ships it to the client like any   |
+| other controller; the client uses "zero zones / zero LEDs" as the signal  |
+| that this entry is a detection failure, and informs the user the device   |
+| was seen but is not available.                                            |
+|                                                                           |
+| Memory: RegisterRGBController takes ownership; the Cleanup() path below   |
+| deletes every entry in rgb_controllers_hw between detection runs, so the  |
+| placeholder is freed with the rest and does not leak across rescans.      |
+\*-------------------------------------------------------------------------*/
+static void RegisterDetectionFailurePlaceholder(const char* detector_name)
+{
+    RGBController_Dummy* placeholder = new RGBController_Dummy();
+    placeholder->name    = detector_name;
+    placeholder->type    = DEVICE_TYPE_UNKNOWN;
+    placeholder->version = "";
+    placeholder->serial  = "";
+    placeholder->location = "";
+    ResourceManager::get()->RegisterRGBController(placeholder);
+}
+
 static bool RunDetectorWithTimeout(
     std::function<void()>   fn,
     const char*             name,
@@ -1085,12 +1110,18 @@ static bool RunDetectorWithTimeout(
     if(future.wait_for(std::chrono::milliseconds(timeout_ms)) == std::future_status::ready)
     {
         worker.join();
-        return future.get();
+        bool ok = future.get();
+        if(!ok)
+        {
+            RegisterDetectionFailurePlaceholder(name);
+        }
+        return ok;
     }
     else
     {
         LOG_ERROR("[%s] detector timed out after %u ms, skipping device", name, timeout_ms);
         worker.detach();
+        RegisterDetectionFailurePlaceholder(name);
         return false;
     }
 }

@@ -164,6 +164,42 @@ mechanism are universally useful. SignalRGB famously isolates detectors;
 upstream OpenRGB would benefit from the same. If accepted, we drop this patch
 on the next sync.
 
+### ResourceManager.cpp - detection-failure placeholder controllers
+
+**What we changed:**
+
+1. Added `#include "RGBController_Dummy.h"` near the other resource-manager
+   includes.
+2. Added a static helper `RegisterDetectionFailurePlaceholder(const char*)`
+   just above `RunDetectorWithTimeout`. It `new`s an empty
+   `RGBController_Dummy`, sets `name = detector_name` and `type =
+   DEVICE_TYPE_UNKNOWN`, leaves zones/modes/leds empty, and registers it via
+   `ResourceManager::get()->RegisterRGBController`.
+3. `RunDetectorWithTimeout` now calls the placeholder helper on both failure
+   paths: after `future.get()` returns false, and after the timeout `detach`.
+
+**Why:** Without this, a detector that times out or throws leaves no trace
+in the SDK device list - the client never learns the device was seen. The
+placeholder means the name still reaches the client, and the client can use
+"zero zones / zero LEDs" as an unambiguous signal that this entry is a
+detection failure (informational only, not drivable). This is purely additive
+to the exception/timeout patch above.
+
+**Memory:** the placeholder lives in `rgb_controllers_hw` and is freed by the
+existing `Cleanup()` / pre-detection clear path that already `delete`s every
+entry between detection runs. No new lifecycle code.
+
+**Conflict resolution:** if upstream ever adds native "detection failure"
+reporting (e.g. a new SDK packet or an on-controller status flag), drop this
+patch entirely and use their mechanism. Until then, keep the two call sites
+inside `RunDetectorWithTimeout` in sync with any future refactor of that
+helper.
+
+**Upstream PR candidate:** Possible. If we upstream the timeout/exception
+patch, the placeholder-on-failure behavior is a natural follow-on, but the
+right form upstream is probably a typed diagnostic packet rather than an
+empty controller entry. Not worth pushing separately.
+
 ## Verifying after a merge
 
 The CI workflow at `.github/workflows/headless.yml` builds Windows + Linux on
