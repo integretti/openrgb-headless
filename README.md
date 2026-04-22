@@ -13,6 +13,7 @@ The 183 device controllers and the SDK protocol are unchanged from upstream.
 | Upstream OpenRGB Windows portable | ~13 MiB download / ~25 MiB extracted |
 | This fork (Windows x64, with hidapi/libusb/PawnIO DLLs) | **~7.4 MiB** |
 | This fork (Linux x64, dynamic) | **~11 MiB** |
+| This fork (macOS arm64, dynamic, Homebrew dylibs) | **~8.9 MiB** |
 
 ## Why
 
@@ -58,7 +59,7 @@ Everything that's not GUI-bound:
   Qt-free in upstream
 - The `cli.cpp` CLI parser — flags that don't make sense headless
   (`--gui`, `--start-minimized`, `--client`) are accepted but ignored
-- Cross-platform: Windows + Linux supported, macOS source paths preserved
+- Cross-platform: Windows, Linux, and macOS (arm64) all build and ship binaries from CI
 - The qmake build system — kept as-is so upstream merges remain straightforward
 
 ## License
@@ -97,6 +98,26 @@ Verify the binary is Qt-free:
 ldd ./openrgb | grep -i qt
 # (should produce no output)
 ```
+
+### macOS (Homebrew + qmake)
+
+```bash
+brew install qt@5 libusb hidapi mbedtls@3 pkg-config
+export PATH="$(brew --prefix qt@5)/bin:$PATH"
+qmake OpenRGB.pro CONFIG+=release
+make -j$(sysctl -n hw.ncpu)
+```
+
+The macOS build produces a plain Mach-O console binary (not a `.app`
+bundle). Verify it links no Qt frameworks:
+
+```bash
+otool -L ./openrgb | grep -i qt
+# (should produce no output)
+```
+
+CI builds for `macos-14` (Apple Silicon / arm64). x86_64 macOS is not
+currently exercised by CI but the source paths are preserved.
 
 ## Running
 

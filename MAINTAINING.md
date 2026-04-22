@@ -220,8 +220,9 @@ macOS GUI build.
 
 ## Verifying after a merge
 
-The CI workflow at `.github/workflows/headless.yml` builds Windows + Linux on
-every push. Wait for both green before declaring the merge done.
+The CI workflow at `.github/workflows/headless.yml` builds Windows, Linux,
+and macOS (arm64) on every push. Wait for all three green before declaring
+the merge done.
 
 Local smoke test:
 
