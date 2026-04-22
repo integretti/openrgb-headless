@@ -644,6 +644,9 @@ QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.15
 macx {
     CONFIG += link_pkgconfig
 
+    # Headless: emit a plain console executable, not a .app bundle.
+    CONFIG -= app_bundle
+
     PKGCONFIG +=                                                                                \
     libusb-1.0                                                                                  \
     hidapi
@@ -677,11 +680,14 @@ macx {
     -lmbedx509                                                                                  \
     -lmbedcrypto                                                                                \
     -lmbedtls                                                                                   \
-    -L$$MBEDTLS_PREFIX/lib
+    -L$$MBEDTLS_PREFIX/lib                                                                      \
+    -framework IOKit                                                                            \
+    -framework CoreFoundation
 
     # ICON, info_plist, QMAKE_INFO_PLIST removed: headless build is a console
-    # tool, not a .app bundle. macOS support is not actively shipped today but
-    # the source paths are kept so future bring-up needs no .pro restructuring.
+    # tool, not a .app bundle. IOKit + CoreFoundation are required by
+    # dependencies/macUSPCIO/macUSPCIOAccess.h (IOServiceMatching,
+    # kIOMasterPortDefault, etc.).
 }
 
 #-----------------------------------------------------------------------------------------------#

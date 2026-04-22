@@ -140,3 +140,65 @@ jobs:
           name: OpenRGB-headless-linux-x64
           path: bundle/**
           if-no-files-found: error
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies (Homebrew)
+        run: |
+          brew update
+          # mbedtls@3 matches the versioned formula OpenRGB.pro references
+          brew install qt@5 libusb hidapi mbedtls@3 pkg-config
+          # qt@5 is keg-only: expose qmake and its pkg-config files
+          QT_PREFIX=$(brew --prefix qt@5)
+          echo "$QT_PREFIX/bin" >> $GITHUB_PATH
+          echo "PKG_CONFIG_PATH=$QT_PREFIX/lib/pkgconfig:$(brew --prefix mbedtls@3)/lib/pkgconfig:$(brew --prefix libusb)/lib/pkgconfig:$(brew --prefix hidapi)/lib/pkgconfig" >> $GITHUB_ENV
+
+      - name: qmake
+        run: |
+          qmake -v
+          qmake OpenRGB.pro CONFIG+=release
+
+      - name: make
+        run: |
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Inspect output and stage bundle
+        run: |
+          # .pro sets `CONFIG -= app_bundle` for mac, so output is a plain binary
+          if [ -f openrgb ]; then
+            BIN=openrgb
+          elif [ -f OpenRGB ]; then
+            BIN=OpenRGB
+          else
+            echo "Build artifact missing!"
+            find . -maxdepth 2 -name 'openrgb*' -o -name 'OpenRGB*'
+            exit 1
+          fi
+          ls -lh "$BIN"
+          file "$BIN"
+          mv "$BIN" OpenRGB-headless
+          echo "--- linked dylibs ---"
+          otool -L OpenRGB-headless
+          echo "--- Qt libs in dependency tree ---"
+          otool -L OpenRGB-headless | grep -i 'qt' || echo "(none - Qt successfully removed)"
+
+          mkdir -p bundle
+          cp OpenRGB-headless bundle/
+          cp LICENSE bundle/LICENSE-OpenRGB.txt
+          cat > bundle/README.txt <<'EOF'
+          OpenRGB headless build
+          ----------------------
+          Source: https://github.com/integretti/openrgb-headless
+          License: GPL-2.0-or-later (see LICENSE-OpenRGB.txt)
+          EOF
+          ls -lh bundle/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenRGB-headless-macos-arm64
+          path: bundle/**
+          if-no-files-found: error

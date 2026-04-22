@@ -58,7 +58,7 @@ make -j$(nproc)
 nc -z 127.0.0.1 6742 && echo "server ok"
 kill %1
 
-# 4. Push and let CI verify Windows + Linux
+# 4. Push and let CI verify Windows + Linux + macOS
 git push origin headless
 ```
 
@@ -199,6 +199,24 @@ helper.
 patch, the placeholder-on-failure behavior is a natural follow-on, but the
 right form upstream is probably a typed diagnostic packet rather than an
 empty controller entry. Not worth pushing separately.
+
+### OpenRGB.pro - macOS headless build
+
+**What we changed:** inside the `macx { }` block,
+
+1. `CONFIG -= app_bundle` so the build emits a plain Mach-O console
+   executable instead of a `.app` bundle.
+2. Added `-framework IOKit` and `-framework CoreFoundation` to `LIBS`.
+
+**Why:** the headless fork ships a console binary on every platform, not a
+macOS `.app`. `IOKit` + `CoreFoundation` are required by
+`dependencies/macUSPCIO/macUSPCIOAccess.h` (uses `IOServiceMatching`,
+`kIOMasterPortDefault`, etc.); upstream used to get them transitively via
+Qt's `QtGui` framework, which the headless build no longer links.
+
+**Conflict resolution:** if upstream edits the `macx` block, keep both
+changes on top. They are additive - neither line affects upstream's
+macOS GUI build.
 
 ## Verifying after a merge
 
